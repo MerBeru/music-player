@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>music player</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+/* 유튜브 재생 전용 페이지 : 웹(naru 등)에 올려 두면, 파일로 직접 연 index.html 도 이 페이지를 통해 음악을 재생할 수 있습니다.
+   (유튜브는 file:// 주소의 페이지에서는 재생을 거부하기 때문) */
+let yp=null,ready=false,q=[],cur=null,vol=60;
+const post=m=>parent.postMessage(m,'*');
+const run=f=>ready?f():q.push(f);
+window.onYouTubeIframeAPIReady=()=>{
+  const pv={playsinline:1,controls:0,disablekb:1,rel:0};
+  if(/^https?:/.test(location.origin))pv.origin=location.origin;
+  yp=new YT.Player('p',{width:'100%',height:'100%',playerVars:pv,events:{
+    onReady:()=>{ready=true;yp.setVolume(vol);q.splice(0).forEach(f=>f());post({type:'ready'});},
+    onStateChange:e=>{
+      const PS=YT.PlayerState;
+      if(e.data===PS.ENDED&&cur&&cur.id){yp.seekTo(cur.start||0,true);yp.playVideo();return;}   /* 한 곡 반복 */
+      post({type:'state',playing:e.data===PS.PLAYING||e.data===PS.BUFFERING});
+    },
+    onError:()=>post({type:'error'})}});
+};
+addEventListener('message',e=>{
+  const m=e.data||{};
+  if(m.type==='load')run(()=>{cur=m;
+    if(m.id)yp.loadVideoById({videoId:m.id,startSeconds:m.start||0});
+    else{yp.loadPlaylist({list:m.list,listType:'playlist'});yp.setLoop(true);}});
+  else if(m.type==='play')run(()=>yp.playVideo());
+  else if(m.type==='pause')run(()=>yp.pauseVideo());
+  else if(m.type==='volume')run(()=>{vol=m.v;yp.setVolume(vol);});
+});
+const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';
+s.onerror=()=>post({type:'error'});document.head.append(s);
+</script>
+</body>
+</html>
